@@ -32,8 +32,14 @@ import (
 	"github.com/google/googlesource-auth-tools/credentials"
 )
 
+const (
+	refreshInterval = 45 * time.Minute
+)
+
 var (
 	outputFile string
+
+	runAsDaemon = flag.Bool("run-as-daemon", false, "run the process as a daemon. It refreshes the cookies every 45 minutes.")
 )
 
 func init() {
@@ -46,8 +52,26 @@ func init() {
 
 func main() {
 	flag.Parse()
-	if err := writeCookie(context.Background()); err != nil {
-		log.Fatalf("Cannot write cookies: %v", err)
+	if *runAsDaemon {
+		// See http://man7.org/linux/man-pages/man7/daemon.7.html for
+		// the new style daemons.
+		timer := time.NewTimer(refreshInterval)
+		for {
+			if err := writeCookie(context.Background()); err != nil {
+				log.Printf("Cannot write cookies: %v", err)
+			} else {
+				log.Printf("Wrote cookies to %s", outputFile)
+			}
+			if !timer.Stop() {
+				<-timer.C
+			}
+			timer.Reset(refreshInterval)
+			<-timer.C
+		}
+	} else {
+		if err := writeCookie(context.Background()); err != nil {
+			log.Fatalf("Cannot write cookies: %v", err)
+		}
 	}
 }
 
