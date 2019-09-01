@@ -20,7 +20,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"net/url"
@@ -47,13 +46,19 @@ func init() {
 
 func main() {
 	flag.Parse()
+	if err := writeCookie(context.Background()); err != nil {
+		log.Fatalf("Cannot write cookies: %v", err)
+	}
+}
+
+func writeCookie(ctx context.Context) error {
 	gitBinary, err := credentials.FindGitBinary()
 	if err != nil {
-		log.Fatalf("Cannot find the git binary: %v", err)
+		return fmt.Errorf("cannot find the git binary: %v", err)
 	}
-	urls, err := gitBinary.ListURLs(context.Background())
+	urls, err := gitBinary.ListURLs(ctx)
 	if err != nil {
-		log.Fatalf("Cannot read the list of URLs in git-config: %v", err)
+		return fmt.Errorf("cannot read the list of URLs in git-config: %v", err)
 	}
 	var hasGoogleSource, hasSourceDevelopers bool
 	for _, u := range urls {
@@ -73,38 +78,39 @@ func main() {
 
 	cookies := []*http.Cookie{}
 	for _, u := range urls {
-		token, err := credentials.MakeToken(context.Background(), u)
+		token, err := credentials.MakeToken(ctx, u)
 		if err != nil {
-			log.Fatalf("Cannot create a token for %s: %v", u, err)
+			return fmt.Errorf("cannot create a token for %s: %v", u, err)
 		}
 		cookies = append(cookies, credentials.MakeCookies(u, token)...)
 	}
 
 	if outputFile == "" {
-		outputFile, err = gitBinary.PathConfig(context.Background(), "google.cookieFile")
+		outputFile, err = gitBinary.PathConfig(ctx, "google.cookieFile")
 		if err != nil {
-			log.Fatalf("Cannot read google.cookieFile in git-config: %v", err)
+			return fmt.Errorf("cannot read google.cookieFile in git-config: %v", err)
 		}
 	}
 	if outputFile == "" {
 		u, err := user.Current()
 		if err != nil {
-			log.Fatalf("Cannot get the current user: %v", err)
+			return fmt.Errorf("cannot get the current user: %v", err)
 		}
 		outputFile = filepath.Join(u.HomeDir, ".git-credential-cache", "googlesource-cookieauth-cookie")
 	}
 
-	var w io.Writer
+	var w *os.File
 	if outputFile == "-" {
 		w = os.Stdout
 	} else {
 		if err := os.MkdirAll(filepath.Dir(outputFile), 0700); err != nil {
-			log.Fatalf("Cannot create the output directory: %v", err)
+			return fmt.Errorf("cannot create the output directory: %v", err)
 		}
 		w, err = os.OpenFile(outputFile, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
 		if err != nil {
-			log.Fatalf("Cannot open the output file: %v", err)
+			return fmt.Errorf("cannot open the output file: %v", err)
 		}
+		defer w.Close()
 	}
 
 	fmt.Fprintf(w, "# Created by %s at %s\n", os.Args[0], time.Now().Format(time.RFC3339))
@@ -112,4 +118,5 @@ func main() {
 	for _, c := range cookies {
 		p.Marshal(w, c)
 	}
+	return nil
 }
