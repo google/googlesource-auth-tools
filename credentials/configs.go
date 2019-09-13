@@ -139,7 +139,7 @@ func (g GitBinary) ListURLs(ctx context.Context) ([]*url.URL, error) {
 		return nil, xerrors.Errorf("credentials: cannot get gitconfig: %v", err)
 	}
 
-	urls := []*url.URL{}
+	m := map[string]bool{}
 	for _, s := range strings.Split(string(bs), "\000") {
 		if !strings.HasPrefix(s, "google.") {
 			continue
@@ -155,6 +155,15 @@ func (g GitBinary) ListURLs(ctx context.Context) ([]*url.URL, error) {
 		u, err := url.Parse(s)
 		if err != nil {
 			return nil, xerrors.Errorf("credentials: cannot parse the URL %s: %v", s, err)
+		}
+		m[u.String()] = true
+	}
+	urls := []*url.URL{}
+	for rawURL, _ := range m {
+		// The URL should be able to be re-parsed.
+		u, err := url.Parse(rawURL)
+		if err != nil {
+			panic(err)
 		}
 		urls = append(urls, u)
 	}
