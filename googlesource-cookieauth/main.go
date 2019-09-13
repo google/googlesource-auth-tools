@@ -37,17 +37,13 @@ const (
 )
 
 var (
-	outputFile string
+	configs StringList
 
 	runAsDaemon = flag.Bool("run-as-daemon", false, "run the process as a daemon. It refreshes the cookies every 45 minutes.")
 )
 
 func init() {
-	const (
-		usage = "the output filepath. If unspecified, defaults to $HOME/.git-credential-cache/googlesource-cookieauth-cookie"
-	)
-	flag.StringVar(&outputFile, "output", "", usage)
-	flag.StringVar(&outputFile, "o", "", usage)
+	flag.Var(&configs, "c", "configuration parameters to the git command. This can be specified repeatedly.")
 }
 
 func main() {
@@ -60,7 +56,7 @@ func main() {
 			if err := writeCookie(context.Background()); err != nil {
 				log.Printf("Cannot write cookies: %v", err)
 			} else {
-				log.Printf("Wrote cookies to %s", outputFile)
+				log.Printf("Wrote cookies")
 			}
 			if !timer.Stop() {
 				<-timer.C
@@ -80,6 +76,7 @@ func writeCookie(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("cannot find the git binary: %v", err)
 	}
+	gitBinary.Configs = configs
 	urls, err := gitBinary.ListURLs(ctx)
 	if err != nil {
 		return fmt.Errorf("cannot read the list of URLs in git-config: %v", err)
@@ -102,18 +99,16 @@ func writeCookie(ctx context.Context) error {
 
 	cookies := []*http.Cookie{}
 	for _, u := range urls {
-		token, err := credentials.MakeToken(ctx, u)
+		token, err := credentials.MakeToken(ctx, gitBinary, u)
 		if err != nil {
 			return fmt.Errorf("cannot create a token for %s: %v", u, err)
 		}
 		cookies = append(cookies, credentials.MakeCookies(u, token)...)
 	}
 
-	if outputFile == "" {
-		outputFile, err = gitBinary.PathConfig(ctx, "google.cookieFile")
-		if err != nil {
-			return fmt.Errorf("cannot read google.cookieFile in git-config: %v", err)
-		}
+	outputFile, err := gitBinary.PathConfig(ctx, "google.cookieFile")
+	if err != nil {
+		return fmt.Errorf("cannot read google.cookieFile in git-config: %v", err)
 	}
 	if outputFile == "" {
 		u, err := user.Current()
@@ -143,4 +138,18 @@ func writeCookie(ctx context.Context) error {
 		p.Marshal(w, c)
 	}
 	return nil
+}
+
+type StringList []string
+
+func (l *StringList) Set(s string) error {
+	*l = append(*l, s)
+	return nil
+}
+
+func (l *StringList) String() string {
+	if l == nil {
+		return ""
+	}
+	return fmt.Sprintf("%s", *l)
 }

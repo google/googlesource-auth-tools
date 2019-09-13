@@ -72,39 +72,6 @@ type CredentialConfig struct {
 	GcloudPath string
 }
 
-// ConfigFromGitConfig creates a CredentialConfig from git-config.
-func ConfigFromGitConfig(ctx context.Context, u *url.URL) (*CredentialConfig, error) {
-	gitBinary, err := FindGitBinary()
-	if err != nil {
-		return nil, err
-	}
-	g := gitBinary.WithURL(u)
-
-	c := &CredentialConfig{}
-
-	c.Account, err = g.StringConfig(ctx, "google.account")
-	if err != nil {
-		return nil, xerrors.Errorf("credentials: cannot get google.account config: %v", err)
-	}
-
-	c.Scopes, err = g.StringListConfig(ctx, "google.scopes")
-	if err != nil {
-		return nil, xerrors.Errorf("credentials: cannot get a list of OAuth2 scopes: %v", err)
-	}
-
-	c.ServiceAccountDelegateEmails, err = g.StringListConfig(ctx, "google.serviceAccountDelegateEmails")
-	if err != nil {
-		return nil, xerrors.Errorf("credentials: cannot get a list of service account delegates: %v", err)
-	}
-
-	c.GcloudPath, err = g.PathConfig(ctx, "google.gcloudPath")
-	if err != nil {
-		return nil, xerrors.Errorf("credentials: cannot get the gcloud path: %v", err)
-	}
-
-	return c, nil
-}
-
 // GitConfigAccessor is an interface for reading git-config.
 type GitConfigAccessor interface {
 	// BoolConfig returns a gitconfig config value as a boolean.
@@ -119,20 +86,26 @@ type GitConfigAccessor interface {
 }
 
 // GitBinary is a path to Git binary.
-type GitBinary string
+type GitBinary struct {
+	// Path is a path to the Git binary.
+	Path string
+	// Configs are the additional Git configs specified via "-c".
+	Configs []string
+}
 
 // FindGitBinary finds a git binary from the PATH.
 func FindGitBinary() (GitBinary, error) {
 	p, err := exec.LookPath("git")
 	if err != nil {
-		return GitBinary(""), xerrors.Errorf("credentials: cannot find the git binary: %v", err)
+		return GitBinary{}, xerrors.Errorf("credentials: cannot find the git binary: %v", err)
 	}
-	return GitBinary(p), nil
+	return GitBinary{Path: p}, nil
 }
 
 // ListURLs returns a list of URLs specified for "google" section.
 func (g GitBinary) ListURLs(ctx context.Context) ([]*url.URL, error) {
-	cmd := exec.CommandContext(ctx, string(g), "config", "--name-only", "--list", "--null")
+	args := append(constructConfigArgs(g), "config", "--name-only", "--list", "--null")
+	cmd := exec.CommandContext(ctx, g.Path, args...)
 	cmd.Stderr = os.Stderr
 	bs, err := cmd.Output()
 	if err != nil {
@@ -170,40 +143,70 @@ func (g GitBinary) ListURLs(ctx context.Context) ([]*url.URL, error) {
 	return urls, nil
 }
 
+// ConfigFromGitConfig creates a CredentialConfig from git-config.
+func (g GitBinary) CredentialConfigFromGitConfig(ctx context.Context, u *url.URL) (*CredentialConfig, error) {
+	scoped := g.WithURL(u)
+
+	c := &CredentialConfig{}
+
+	var err error
+	c.Account, err = scoped.StringConfig(ctx, "google.account")
+	if err != nil {
+		return nil, xerrors.Errorf("credentials: cannot get google.account config: %v", err)
+	}
+
+	c.Scopes, err = scoped.StringListConfig(ctx, "google.scopes")
+	if err != nil {
+		return nil, xerrors.Errorf("credentials: cannot get a list of OAuth2 scopes: %v", err)
+	}
+
+	c.ServiceAccountDelegateEmails, err = scoped.StringListConfig(ctx, "google.serviceAccountDelegateEmails")
+	if err != nil {
+		return nil, xerrors.Errorf("credentials: cannot get a list of service account delegates: %v", err)
+	}
+
+	c.GcloudPath, err = scoped.PathConfig(ctx, "google.gcloudPath")
+	if err != nil {
+		return nil, xerrors.Errorf("credentials: cannot get the gcloud path: %v", err)
+	}
+
+	return c, nil
+}
+
 // WithURL binds an URL for git-config. This makes it specify --get-urlmatch.
 func (g GitBinary) WithURL(u *url.URL) GitConfigAccessor {
-	return gitConfigAccessor{string(g), u}
+	return gitConfigAccessor{g, u}
 }
 
 func (g GitBinary) BoolConfig(ctx context.Context, key string) (bool, error) {
-	return gitConfigAccessor{string(g), nil}.BoolConfig(ctx, key)
+	return gitConfigAccessor{g, nil}.BoolConfig(ctx, key)
 }
 
 func (g GitBinary) PathConfig(ctx context.Context, key string) (string, error) {
-	return gitConfigAccessor{string(g), nil}.PathConfig(ctx, key)
+	return gitConfigAccessor{g, nil}.PathConfig(ctx, key)
 }
 
 func (g GitBinary) StringConfig(ctx context.Context, key string) (string, error) {
-	return gitConfigAccessor{string(g), nil}.StringConfig(ctx, key)
+	return gitConfigAccessor{g, nil}.StringConfig(ctx, key)
 }
 
 func (g GitBinary) StringListConfig(ctx context.Context, key string) ([]string, error) {
-	return gitConfigAccessor{string(g), nil}.StringListConfig(ctx, key)
+	return gitConfigAccessor{g, nil}.StringListConfig(ctx, key)
 }
 
 type gitConfigAccessor struct {
-	gitBinary string
+	gitBinary GitBinary
 	u         *url.URL
 }
 
 func (g gitConfigAccessor) get(ctx context.Context, ty, key string) (string, error) {
-	args := []string{"config", ty}
+	args := append(constructConfigArgs(g.gitBinary), "config", ty)
 	if g.u != nil {
 		args = append(args, "--get-urlmatch", key, g.u.String())
 	} else {
 		args = append(args, key)
 	}
-	cmd := exec.CommandContext(ctx, g.gitBinary, args...)
+	cmd := exec.CommandContext(ctx, g.gitBinary.Path, args...)
 	cmd.Stderr = os.Stderr
 	bs, err := cmd.Output()
 	if err != nil {
@@ -247,4 +250,12 @@ func (g gitConfigAccessor) StringListConfig(ctx context.Context, key string) ([]
 		ss = append(ss, strings.TrimSpace(s))
 	}
 	return ss, nil
+}
+
+func constructConfigArgs(g GitBinary) []string {
+	args := []string{}
+	for _, c := range g.Configs {
+		args = append(args, "-c", c)
+	}
+	return args
 }

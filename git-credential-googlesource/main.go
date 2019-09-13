@@ -91,7 +91,12 @@ func main() {
 		log.Fatalf("Unknown protocol: %s", protocol)
 	}
 
-	token, err := credentials.MakeToken(context.Background(), u)
+	gitBinary, err := credentials.FindGitBinary()
+	if err != nil {
+		log.Fatalf("Cannot find the git binary: %v", err)
+	}
+
+	token, err := credentials.MakeToken(context.Background(), gitBinary, u)
 	if err != nil {
 		log.Fatalf("Cannot get a token: %v", err)
 	}

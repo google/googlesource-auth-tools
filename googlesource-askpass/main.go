@@ -37,7 +37,11 @@ func main() {
 		fmt.Print("git-service-account")
 		return
 	} else if strings.Contains(prompt, "password") {
-		token, err := credentials.MakeToken(context.Background(), nil)
+		gitBinary, err := credentials.FindGitBinary()
+		if err != nil {
+			log.Fatalf("Cannot find the git binary: %v", err)
+		}
+		token, err := credentials.MakeToken(context.Background(), gitBinary, nil)
 		if err != nil {
 			log.Fatalf("Cannot get a token: %v", err)
 		}

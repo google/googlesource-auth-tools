@@ -35,8 +35,7 @@ export GIT_CONFIG_NOSYSTEM=1
 export GIT_TERMINAL_PROMPT=0
 orig_home=$HOME
 export HOME=$tmpdir
-export GIT_CONFIG=$HOME/.gitconfig
-touch $GIT_CONFIG
+touch $HOME/.gitconfig
 ln -s $orig_home/.config $HOME/.config
 
 # ------------------------------------------------------------------------------
@@ -48,7 +47,7 @@ cat >$HOME/.gitconfig <<EOF
 [google]
   account = $gcloud_user
 EOF
-googlesource-cookieauth -o $HOME/.gitcookies || exit 1
+googlesource-cookieauth -c google.cookieFile=$HOME/.gitcookies || exit 1
 git -c http.cookieFile=$HOME/.gitcookies ls-remote https://code.googlesource.com/a/git >/dev/null || exit 1
 
 # google.account = application-default
@@ -56,7 +55,7 @@ cat >$HOME/.gitconfig <<EOF
 [google]
   account = application-default
 EOF
-googlesource-cookieauth -o $HOME/.gitcookies || exit 1
+googlesource-cookieauth -c google.cookieFile=$HOME/.gitcookies || exit 1
 git -c http.cookieFile=$HOME/.gitcookies ls-remote https://code.googlesource.com/a/git >/dev/null || exit 1
 
 # google.account = <SERVICE_ACCOUNT>
@@ -64,7 +63,7 @@ cat >$HOME/.gitconfig <<EOF
 [google]
   account = $service_account_user
 EOF
-googlesource-cookieauth -o $HOME/.gitcookies || exit 1
+googlesource-cookieauth -c google.cookieFile=$HOME/.gitcookies || exit 1
 git -c http.cookieFile=$HOME/.gitcookies ls-remote https://code.googlesource.com/a/git >/dev/null || exit 1
 
 # ------------------------------------------------------------------------------
@@ -83,5 +82,5 @@ git -c credential.helper=googlesource ls-remote https://code.googlesource.com/a/
 GIT_ASKPASS=googlesource-askpass git ls-remote https://code.googlesource.com/a/git >/dev/null || exit 1
 
 # googlesource-cookieauth
-googlesource-cookieauth -o $HOME/.gitcookies || exit 1
+googlesource-cookieauth -c google.cookieFile=$HOME/.gitcookies || exit 1
 git -c http.cookieFile=$HOME/.gitcookies ls-remote https://code.googlesource.com/a/git >/dev/null || exit 1

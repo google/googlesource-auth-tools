@@ -42,8 +42,8 @@ const (
 )
 
 // MakeToken creates a token for the given URL.
-func MakeToken(ctx context.Context, u *url.URL) (*oauth2.Token, error) {
-	c, err := ConfigFromGitConfig(ctx, u)
+func MakeToken(ctx context.Context, g GitBinary, u *url.URL) (*oauth2.Token, error) {
+	c, err := g.CredentialConfigFromGitConfig(ctx, u)
 	if err != nil {
 		return nil, xerrors.Errorf("credentials: cannot get configs: %v", err)
 	}
