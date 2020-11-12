@@ -3,14 +3,11 @@ module github.com/google/googlesource-auth-tools
 go 1.12
 
 require (
-	cloud.google.com/go v0.46.2 // indirect
+	cloud.google.com/go v0.72.0
 	github.com/aki237/nscjar v0.0.0-20171019063319-e2df936ddd60
-	go.opencensus.io v0.22.1 // indirect
-	golang.org/x/net v0.0.0-20190912160710-24e19bdeb0f2 // indirect
-	golang.org/x/oauth2 v0.0.0-20190604053449-0f29369cfe45
-	golang.org/x/sys v0.0.0-20190913121621-c3b328c6e5a7 // indirect
-	golang.org/x/xerrors v0.0.0-20190717185122-a985d3407aa7
-	google.golang.org/api v0.10.0
-	google.golang.org/appengine v1.6.2 // indirect
-	google.golang.org/grpc v1.23.1 // indirect
+	github.com/googleapis/gax-go v1.0.3
+	golang.org/x/oauth2 v0.0.0-20200902213428-5d25da1a8d43
+	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1
+	google.golang.org/api v0.35.0
+	google.golang.org/genproto v0.0.0-20201112120144-2985b7af83de
 )
